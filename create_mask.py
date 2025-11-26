@@ -32,6 +32,7 @@ def build_face_mask(img, idxs=None, kernel_size=21):
     return 1 - mask
 
 if __name__ == "__main__":
+    # Generate and save a face mask for the given image
     img = cv2.imread('images/eyal.jpg')
     mask = build_face_mask(img)
     cv2.imwrite('images/binary_mask.png', mask * 255)

@@ -59,4 +59,3 @@ if __name__ == "__main__":
     imgC = flip_lr(cv2.imread("images/bazz_civil.jpg"))
     imgC_aligned = align_face(imgC, imgA)
     cv2.imwrite("images/bazz_civil_aligned.jpg", imgC_aligned)
-# now use imgA, imgB_aligned and your single mask in `ex3.py`

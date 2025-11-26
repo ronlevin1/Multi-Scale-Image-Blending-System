@@ -98,7 +98,8 @@ def max_pyramid_levels(shape):
     return levels
 
 
-def main(imgA_path, imgB_path, output_path, mask_path='images/binary_mask.png'):
+def main(imgA_path, imgB_path, output_path,
+         mask_path='images/binary_mask.png'):
     """
     • Given two images A and B, and a binary mask M
     • Construct Laplacian Pyramids La and Lb
@@ -151,6 +152,7 @@ def main(imgA_path, imgB_path, output_path, mask_path='images/binary_mask.png'):
 
 
 if __name__ == '__main__':
+    # Example usage
     print("Running...")
     imgA_path = 'images/eyal.jpg'
     imgB_path = 'images/bazz_aligned.jpg'
