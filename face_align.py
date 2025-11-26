@@ -4,6 +4,7 @@ import numpy as np
 
 mp_face = mp.solutions.face_mesh
 
+
 def get_landmarks(img):
     with mp_face.FaceMesh(static_image_mode=True,
                           max_num_faces=1,
@@ -16,16 +17,18 @@ def get_landmarks(img):
         pts = np.array([[p.x * w, p.y * h] for p in lm], dtype=np.float32)
         return pts
 
+
 def get_affine_keypoints(landmarks):
     # use: left eye outer corner, right eye outer corner, tip of nose
-    idx_left_eye  = 33
+    idx_left_eye = 33
     idx_right_eye = 263
-    idx_nose      = 1
+    idx_nose = 1
     return np.stack([
         landmarks[idx_left_eye],
         landmarks[idx_right_eye],
         landmarks[idx_nose],
     ], axis=0)
+
 
 def align_face(src_img, dst_img):
     src_landmarks = get_landmarks(src_img)
@@ -41,11 +44,19 @@ def align_face(src_img, dst_img):
                              borderMode=cv2.BORDER_REFLECT_101)
     return aligned
 
+
+def flip_lr(img):
+    return cv2.flip(img, 1)
+
+
 if __name__ == "__main__":
     imgA = cv2.imread("images/eyal.jpg")  # base image, where mask is defined
-    imgB = cv2.imread("images/bazz.jpg")  # image to align to A
+    imgB = flip_lr(cv2.imread("images/bazz_toy.jpg"))  # image to align to A
 
     imgB_aligned = align_face(imgB, imgA)
-    cv2.imwrite("images/bazz_aligned.jpg", imgB_aligned)
+    cv2.imwrite("images/bazz_toy_aligned.jpg", imgB_aligned)
 
-    # now use imgA, imgB_aligned and your single mask in `ex3.py`
+    imgC = flip_lr(cv2.imread("images/bazz_civil.jpg"))
+    imgC_aligned = align_face(imgC, imgA)
+    cv2.imwrite("images/bazz_civil_aligned.jpg", imgC_aligned)
+# now use imgA, imgB_aligned and your single mask in `ex3.py`

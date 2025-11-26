@@ -8,11 +8,18 @@ EXPAND_KERNEL = GAUSSIAN_KERNEL / (GAUSSIAN_KERNEL.sum() / 2.0)
 
 
 def _blur_single_channel(img, kernel):
-    blurred = np.zeros_like(img)
+    pad = len(kernel) // 2
+    temp = np.zeros_like(img, dtype=np.float64)
+
+    row_padded = np.pad(img, ((0, 0), (pad, pad)), mode='edge')
     for i in range(img.shape[0]):
-        blurred[i, :] = np.convolve(img[i, :], kernel, mode='same')
+        temp[i, :] = np.convolve(row_padded[i], kernel, mode='valid')
+
+    col_padded = np.pad(temp, ((pad, pad), (0, 0)), mode='edge')
+    blurred = np.zeros_like(img, dtype=np.float64)
     for j in range(img.shape[1]):
-        blurred[:, j] = np.convolve(blurred[:, j], kernel, mode='same')
+        blurred[:, j] = np.convolve(col_padded[:, j], kernel, mode='valid')
+
     return blurred
 
 
@@ -91,7 +98,7 @@ def max_pyramid_levels(shape):
     return levels
 
 
-def main():
+def main(imgA_path, imgB_path, output_path, mask_path='images/binary_mask.png'):
     """
     • Given two images A and B, and a binary mask M
     • Construct Laplacian Pyramids La and Lb
@@ -101,9 +108,6 @@ def main():
     • Sum all levels Lc in to get the blended image
     """
     # load images and mask
-    imgA_path = 'images/eyal.jpg'
-    imgB_path = 'images/bazz_aligned.jpg'
-    mask_path = 'images/binary_mask.png'
     imgA = load_image(imgA_path)
     imgB = load_image(imgB_path)
     mask = load_image(mask_path, as_gray=True)
@@ -142,9 +146,18 @@ def main():
         blended_img += Lc[k]
 
     blended_img = np.clip(blended_img, 0.0, 1.0)
-    plt.imsave('blended_result.png', blended_img)
+    plt.imsave(output_path, blended_img)
     return blended_img
 
 
 if __name__ == '__main__':
-    main()
+    print("Running...")
+    imgA_path = 'images/eyal.jpg'
+    imgB_path = 'images/bazz_aligned.jpg'
+    mask_path = 'images/binary_mask.png'
+
+    main(imgA_path, imgB_path, 'outputs/blended_ver_0.jpg', mask_path)
+    # main(imgA_path, 'images/bazz_civil_aligned.jpg', 'outputs/blended_civil.jpg', mask_path)
+    # main(imgA_path, 'images/bazz_toy_aligned.jpg', 'outputs/blended_toy.jpg', mask_path)
+
+    print("Done ..!")
