@@ -1,5 +1,8 @@
 import numpy as np
 import matplotlib.pyplot as plt
+import cv2
+from create_mask import build_face_mask
+from face_align import align_face
 
 GAUSSIAN_VECTOR = [1, 4, 6, 4, 1]
 GAUSSIAN_KERNEL = np.array(GAUSSIAN_VECTOR, dtype=np.float64)
@@ -88,6 +91,24 @@ def load_image(img_path, as_gray=False):
     return img
 
 
+def plot_triptych(imgA, imgB, blended, titles=None, figsize=(12, 4)):
+    if titles is None:
+        titles = ("Buzzi", "Shauli (Aligned)", "Blended")
+    fig, axes = plt.subplots(1, 3, figsize=figsize)
+    for ax, image, title in zip(axes, (imgA, imgB, blended), titles):
+        display = image.astype(np.float64, copy=False)
+        if display.max() > 1.0:
+            display = display / 255.0
+        if display.ndim == 2:
+            ax.imshow(display, cmap='gray')
+        else:
+            ax.imshow(np.clip(display, 0.0, 1.0))
+        ax.set_title(title)
+        ax.axis('off')
+    fig.tight_layout()
+    return fig, axes
+
+
 def max_pyramid_levels(shape):
     h, w = shape[:2]
     levels = 1
@@ -152,14 +173,27 @@ def main(imgA_path, imgB_path, output_path,
 
 
 if __name__ == '__main__':
-    # Example usage
     print("Running...")
-    imgA_path = 'images/eyal.jpg'
-    imgB_path = 'images/bazz_aligned.jpg'
-    mask_path = 'images/binary_mask.png'
+    imgA_path = 'images/buzzi-vs-eyal/buzzi.jpeg'
+    imgB_path = 'images/buzzi-vs-shauli/shauli.jpg'
+    imgB_aligned_path = 'images/buzzi-vs-shauli/aligned.jpg'
+    mask_path = 'images/buzzi-vs-shauli/mask.jpg'
 
-    main(imgA_path, imgB_path, 'outputs/blended_ver_0.jpg', mask_path)
-    # main(imgA_path, 'images/bazz_civil_aligned.jpg', 'outputs/blended_civil.jpg', mask_path)
-    # main(imgA_path, 'images/bazz_toy_aligned.jpg', 'outputs/blended_toy.jpg', mask_path)
+    imgA_bgr = cv2.imread(imgA_path)
+    imgB_bgr = cv2.imread(imgB_path)
+    if imgA_bgr is None or imgB_bgr is None:
+        raise FileNotFoundError('Could not load source images for blending pipeline')
+
+    mask = build_face_mask(imgA_bgr)
+    cv2.imwrite(mask_path, mask * 255)
+
+    imgB_aligned = align_face(imgB_bgr, imgA_bgr)
+    cv2.imwrite(imgB_aligned_path, imgB_aligned)
+
+    blended = main(imgA_path, imgB_aligned_path, 'images/buzzi-vs-shauli/blended_ver3.jpg', mask_path)
+    plot_triptych(load_image(imgA_path), load_image(imgB_aligned_path), blended)
+    # save the figure
+    plt.savefig('images/outputs/trio_ver3.jpg')
+    plt.show()
 
     print("Done ..!")

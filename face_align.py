@@ -1,6 +1,7 @@
 import cv2
 import mediapipe as mp
 import numpy as np
+from create_mask import FACE_OVAL_IDX
 
 mp_face = mp.solutions.face_mesh
 
@@ -30,14 +31,25 @@ def get_affine_keypoints(landmarks):
     ], axis=0)
 
 
+def get_shape_keypoints(landmarks, idxs=FACE_OVAL_IDX):
+    return np.asarray(landmarks[idxs], dtype=np.float32)
+
+
 def align_face(src_img, dst_img):
+    """Align src_img to dst_img using facial landmarks."""
     src_landmarks = get_landmarks(src_img)
     dst_landmarks = get_landmarks(dst_img)
 
-    src_pts = get_affine_keypoints(src_landmarks)
-    dst_pts = get_affine_keypoints(dst_landmarks)
+    src_shape = get_shape_keypoints(src_landmarks)
+    dst_shape = get_shape_keypoints(dst_landmarks)
 
-    M = cv2.getAffineTransform(src_pts, dst_pts)
+    M, _ = cv2.estimateAffinePartial2D(src_shape, dst_shape, method=cv2.LMEDS)
+
+    if M is None:
+        src_pts = get_affine_keypoints(src_landmarks)
+        dst_pts = get_affine_keypoints(dst_landmarks)
+        M = cv2.getAffineTransform(src_pts, dst_pts)
+
     h, w = dst_img.shape[:2]
     aligned = cv2.warpAffine(src_img, M, (w, h),
                              flags=cv2.INTER_LINEAR,
@@ -50,12 +62,12 @@ def flip_lr(img):
 
 
 if __name__ == "__main__":
-    imgA = cv2.imread("images/eyal.jpg")  # base image, where mask is defined
-    imgB = flip_lr(cv2.imread("images/bazz_toy.jpg"))  # image to align to A
+    imgB = cv2.imread("images/buzzi-vs-shauli/shauli.jpg")  # base image, where mask is defined
+    imgA = flip_lr(cv2.imread("images/buzzi-vs-shauli/buzzi.jpeg"))  # image to align to A
 
     imgB_aligned = align_face(imgB, imgA)
-    cv2.imwrite("images/bazz_toy_aligned.jpg", imgB_aligned)
-
-    imgC = flip_lr(cv2.imread("images/bazz_civil.jpg"))
-    imgC_aligned = align_face(imgC, imgA)
-    cv2.imwrite("images/bazz_civil_aligned.jpg", imgC_aligned)
+    cv2.imwrite("images/buzzi-vs-shauli/shauli_aligned.jpg", imgB_aligned)
+    #
+    # imgC = flip_lr(cv2.imread("images/bazz_civil.jpg"))
+    # imgC_aligned = align_face(imgC, imgA)
+    # cv2.imwrite("images/bazz_civil_aligned.jpg", imgC_aligned)

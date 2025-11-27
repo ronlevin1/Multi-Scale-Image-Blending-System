@@ -22,6 +22,8 @@ def build_face_mask(img, idxs=None, kernel_size=21):
         lm = res.multi_face_landmarks[0].landmark
         pts = np.array([[lm[i].x * w, lm[i].y * h] for i in idxs], dtype=np.int32)
 
+    pts = cv2.convexHull(pts)
+
     mask = np.zeros((h, w), dtype=np.uint8)
     cv2.fillPoly(mask, [pts], 1)
 
@@ -31,8 +33,21 @@ def build_face_mask(img, idxs=None, kernel_size=21):
 
     return 1 - mask
 
+
 if __name__ == "__main__":
     # Generate and save a face mask for the given image
-    img = cv2.imread('images/eyal.jpg')
+    img = cv2.imread('images/buzzi-vs-shauli/buzzi.jpeg')
     mask = build_face_mask(img)
-    cv2.imwrite('images/binary_mask.png', mask * 255)
+
+    # visualize alignment
+    overlay = img.copy()
+    overlay[mask == 0] = (0, 0, 0)  # or mask == 1 depending on which side you want
+
+    alpha = 0.4
+    blended = cv2.addWeighted(overlay, alpha, img, 1 - alpha, 0)
+
+    cv2.imshow("Face overlay", blended)
+    cv2.waitKey(0)          # wait for a key press
+    cv2.destroyAllWindows() # close the window
+
+    cv2.imwrite('images/buzzi-vs-shauli/buzzi_mask.jpg', mask * 255)
