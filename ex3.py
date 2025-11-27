@@ -2,12 +2,16 @@ import numpy as np
 import matplotlib.pyplot as plt
 import cv2
 from create_mask import build_face_mask
-from face_align import align_face
+from face_align import align_face, flip_lr
 
 GAUSSIAN_VECTOR = [1, 4, 6, 4, 1]
 GAUSSIAN_KERNEL = np.array(GAUSSIAN_VECTOR, dtype=np.float64)
 REDUCE_KERNEL = GAUSSIAN_KERNEL / GAUSSIAN_KERNEL.sum()
 EXPAND_KERNEL = GAUSSIAN_KERNEL / (GAUSSIAN_KERNEL.sum() / 2.0)
+
+"------------------------------------------------------------------------------"
+"-------------------------- Task 1 - Blended Image ----------------------------"
+"------------------------------------------------------------------------------"
 
 
 def _blur_single_channel(img, kernel):
@@ -119,8 +123,8 @@ def max_pyramid_levels(shape):
     return levels
 
 
-def main(imgA_path, imgB_path, output_path,
-         mask_path='images/binary_mask.png'):
+def pyramid_blending(imgA_path, imgB_path, output_path,
+                     mask_path='images/binary_mask.png'):
     """
     • Given two images A and B, and a binary mask M
     • Construct Laplacian Pyramids La and Lb
@@ -172,28 +176,106 @@ def main(imgA_path, imgB_path, output_path,
     return blended_img
 
 
+"------------------------------------------------------------------------------"
+"--------------------------- Task 2 - Hybrid Image ----------------------------"
+"------------------------------------------------------------------------------"
+
+
+def gaussian_kernel(radius):
+    """Return a 1D separable kernel based on discrete binomial coefficients."""
+    if radius <= 0:
+        return np.array([1], dtype=np.int64)
+    size = int(2 * np.ceil(3 * radius) + 1)
+    if size < 1:
+        size = 1
+    coeff = np.array([1], dtype=np.int64)
+    for _ in range(size - 1):
+        coeff = np.convolve(coeff, np.array([1, 1], dtype=np.int64))
+    return coeff / coeff.sum()
+
+
+def hybrid_image(imgA_path, imgB_path, output_path,
+                 low_pass_radius, high_pass_radius):
+    """
+    Create a hybrid image by combining the low-frequency content of imgA
+    with the high-frequency content of imgB.
+    """
+    imgA = load_image(imgA_path, as_gray=True)
+    imgB = load_image(imgB_path, as_gray=True)
+
+    # Ensure both images have 3 channels
+    if imgA.ndim == 2:
+        imgA = np.stack([imgA] * 3, axis=-1)
+    if imgB.ndim == 2:
+        imgB = np.stack([imgB] * 3, axis=-1)
+
+    # Resize imgB to match imgA's size
+    target_h, target_w = imgA.shape[:2]
+    if imgB.shape[0] != target_h or imgB.shape[1] != target_w:
+        imgB = cv2.resize(imgB, (target_w, target_h), interpolation=cv2.INTER_LINEAR)
+
+    kernelA = gaussian_kernel(high_pass_radius)
+    blurredA = blur(imgA, kernelA)
+    high_pass_A = imgA - blurredA
+
+    kernelB = gaussian_kernel(low_pass_radius)
+    low_pass_B = blur(imgB, kernelB)
+
+    hybrid_img = np.clip(low_pass_B + high_pass_A, 0.0, 1.0)
+    # hybrid_img = low_pass_B + high_pass_A
+
+    plt.figure(figsize=(8, 8))
+    plt.imshow(hybrid_img)
+    plt.axis('off')
+    plt.show()
+    plt.imsave(output_path, hybrid_img)
+
+    return hybrid_img
+
+
+"------------------------------------------------------------------------------"
+
 if __name__ == '__main__':
-    print("Running...")
     imgA_path = 'images/buzzi-vs-eyal/buzzi.jpeg'
     imgB_path = 'images/buzzi-vs-shauli/shauli.jpg'
-    imgB_aligned_path = 'images/buzzi-vs-shauli/aligned.jpg'
-    mask_path = 'images/buzzi-vs-shauli/mask.jpg'
+    print("\nRunning...\n")
 
-    imgA_bgr = cv2.imread(imgA_path)
-    imgB_bgr = cv2.imread(imgB_path)
-    if imgA_bgr is None or imgB_bgr is None:
-        raise FileNotFoundError('Could not load source images for blending pipeline')
+    """
+    Task 1 Code - Blended Image
+    """
 
-    mask = build_face_mask(imgA_bgr)
-    cv2.imwrite(mask_path, mask * 255)
+    # imgB_aligned_path = 'images/buzzi-vs-shauli/aligned.jpg'
+    # mask_path = 'images/buzzi-vs-shauli/mask.jpg'
+    #
+    # imgA_bgr = cv2.imread(imgA_path)
+    # imgB_bgr = cv2.imread(imgB_path)
+    # if imgA_bgr is None or imgB_bgr is None:
+    #     raise FileNotFoundError(
+    #         'Could not load source images for blending pipeline')
+    #
+    # mask = build_face_mask(imgA_bgr)
+    # cv2.imwrite(mask_path, mask * 255)
+    #
+    # imgB_aligned = align_face(imgB_bgr, imgA_bgr)
+    # cv2.imwrite(imgB_aligned_path, imgB_aligned)
+    #
+    # print("\nBlending images...\n")
+    # blended = pyramid_blending(imgA_path, imgB_aligned_path,
+    #                            'images/eyal-vs-buzz/blended_ver3.jpg',
+    #                            mask_path)
+    # plot_triptych(load_image(imgA_path), load_image(imgB_aligned_path),
+    #               blended)
+    # # save the figure
+    # plt.savefig('images/outputs/trio_ver4.jpg')
+    # plt.show()
 
-    imgB_aligned = align_face(imgB_bgr, imgA_bgr)
-    cv2.imwrite(imgB_aligned_path, imgB_aligned)
+    """ 
+    Task 2 Code - Hybrid Image
+    """
 
-    blended = main(imgA_path, imgB_aligned_path, 'images/buzzi-vs-shauli/blended_ver3.jpg', mask_path)
-    plot_triptych(load_image(imgA_path), load_image(imgB_aligned_path), blended)
-    # save the figure
-    plt.savefig('images/outputs/trio_ver3.jpg')
-    plt.show()
+    print("Creating hybrid image...")
+    output_path = 'images/outputs/hybrid_ver1.jpg'
+    hybrid = hybrid_image(imgA_path, imgB_path, output_path,
+                          low_pass_radius=15, high_pass_radius=15)
 
-    print("Done ..!")
+    print("\nDone ..!")
