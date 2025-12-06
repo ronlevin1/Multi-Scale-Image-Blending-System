@@ -104,6 +104,39 @@ def flip_lr(img):
 
 
 "------------------------------------------------------------------------------"
+"---------------------------- Plotting utilities ------------------------------"
+"------------------------------------------------------------------------------"
+
+
+def plot_image(image, title=None, out_path=None, cmap=None, show=False,
+               figsize=(6, 6), vmin=None, vmax=None):
+    """
+    Generic helper to plot a single image and optionally save it.
+    Used instead of ad‑hoc matplotlib code blocks.
+    """
+    img = np.asarray(image, dtype=np.float64)
+    if img.max() > 1.0:
+        img = img / 255.0
+    if img.ndim == 2 and cmap is None:
+        cmap = "gray"
+
+    fig, ax = plt.subplots(1, 1, figsize=figsize)
+    ax.imshow(img, cmap=cmap, vmin=vmin, vmax=vmax)
+    if title is not None:
+        ax.set_title(title)
+    ax.axis("off")
+    plt.tight_layout()
+
+    if out_path is not None:
+        fig.savefig(out_path, bbox_inches="tight", pad_inches=0.1)
+    if show:
+        plt.show()
+
+    plt.close(fig)
+    return fig, ax
+
+
+"------------------------------------------------------------------------------"
 "-------------------------- Task 1 - Blended Image ----------------------------"
 "------------------------------------------------------------------------------"
 
@@ -200,23 +233,18 @@ def load_image(img_path, as_gray=False):
 
 
 def plot_triptych(imgA, imgB, blended, titles=None, figsize=(12, 4)):
-    # decrease horizontal space between subplots
+    """
+    Keep this convenience wrapper, but implement using plot_image three times.
+    The three images will be separate figures instead of a single triptych.
+    """
     if titles is None:
         titles = ("Buzzi", "Bibi (Aligned)", "Blended")
-    fig, axes = plt.subplots(1, 3, figsize=figsize)
-    # set horizontal spacing explicitly to avoid tight_layout warnings
-    fig.subplots_adjust(wspace=0.00)
-    for ax, image, title in zip(axes, (imgA, imgB, blended), titles):
-        display = image.astype(np.float64, copy=False)
-        if display.max() > 1.0:
-            display = display / 255.0
-        if display.ndim == 2:
-            ax.imshow(display, cmap='gray')
-        else:
-            ax.imshow(np.clip(display, 0.0, 1.0))
-        ax.set_title(title)
-        ax.axis('off')
-    return fig, axes
+
+    for image, title in zip((imgA, imgB, blended), titles):
+        plot_image(image, title=title, show=False)
+
+    # dummy return for backward compatibility; not really used elsewhere
+    return None, None
 
 
 def max_pyramid_levels(shape):
@@ -270,10 +298,6 @@ def pyramid_blending(imgA_path, imgB_path, output_path,
 
     # reconstruct blended image from Lc
     blended_img = Lc[-1]
-
-    # collect intermediate reconstructions for plotting
-    intermediate_imgs = [np.clip(blended_img.copy(), 0.0, 1.0)]
-
     for k in range(num_levels - 2, -1, -1):
         blended_img = expand(blended_img)
         # Ensure expanded image matches the size of current Lc level
@@ -282,121 +306,9 @@ def pyramid_blending(imgA_path, imgB_path, output_path,
             blended_img = blended_img[:target_height, :target_width, ...]
         blended_img += Lc[k]
 
-        # plot intermediate results as subplots in the same figure
-        # -> collect snapshot after adding this level
-        intermediate_imgs.append(np.clip(blended_img.copy(), 0.0, 1.0))
-
     blended_img = np.clip(blended_img, 0.0, 1.0)
-
-    # plot all intermediate reconstructions in a single row
-    try:
-        n = len(intermediate_imgs)
-        if n > 0:
-            fig, axes = plt.subplots(1, n, figsize=(3 * n, 4))
-            if n == 1:
-                axes = [axes]
-            for i, img_snap in enumerate(intermediate_imgs):
-                ax = axes[i]
-                disp = img_snap
-                if disp.ndim == 2:
-                    ax.imshow(disp, cmap='gray')
-                else:
-                    ax.imshow(np.clip(disp, 0.0, 1.0))
-                ax.set_title(f'Step {i}')
-                ax.axis('off')
-            fig.subplots_adjust(wspace=0.02)
-            plt.tight_layout()
-            fig.savefig('outputs/report/blended_intermediate_steps.jpg', bbox_inches='tight')
-            plt.close(fig)
-    except Exception:
-        # keep pipeline robust; plotting errors shouldn't stop the pipeline
-        pass
-
     plt.imsave(output_path, blended_img)
     return blended_img
-
-
-# TODO: delete this function before submission
-def plot_pyramid_levels(Lc, blended_img, num_levels):
-    """
-    for the report - section 4:
-    create gaussian pyramid for blended image and with Lc (laplacian pyr)
-    save as figures showing 8 levels in the pyramid, in 2 rows of 4 levels,
-    positioned side-by-side. choose 8 levels from the middle of the pyramid.
-    """
-
-    def _select_middle_levels(pyr, count=8):
-        total = len(pyr)
-        if total >= count:
-            start = max(0, (total - count) // 2)
-            return pyr[start:start + count]
-        # pad by repeating last level if not enough levels
-        selected = list(pyr)
-        while len(selected) < count:
-            selected.append(pyr[-1])
-        return selected
-
-    def _to_display(img):
-        img = np.asarray(img, dtype=np.float64)
-        mn, mx = img.min(), img.max()
-        # If the image is already in normalised [0,1] range just clip and return it.
-        # This preserves correct appearance for Gaussian pyramid levels (G), avoiding
-        # unnecessary contrast stretching that makes G[0] look almost white.
-        if mn >= 0.0 and mx <= 1.0:
-            return np.clip(img, 0.0, 1.0)
-
-        # If dynamic range is effectively zero, center and amplify tiny variations.
-        if mx - mn < 1e-12:
-            centered = img - img.mean()
-            s = np.abs(centered).max()
-            if s < 1e-12:
-                return np.zeros_like(img)  # truly constant
-            centered /= (2 * s)
-            return np.clip(centered + 0.5, 0.0, 1.0)
-
-        # Otherwise scale to [0,1] (useful for Laplacian levels with negatives).
-        return np.clip((img - mn) / (mx - mn), 0.0, 1.0)
-
-    G_blended = gaussian_pyramid(blended_img, num_levels)
-    # pick levels
-    # G_levels = _select_middle_levels(G_blended, 8)
-    # Lc_levels = _select_middle_levels(Lc, 8)
-    G_levels = G_blended[3:7]
-    Lc_levels = Lc[3:7]
-
-    # save Gaussian pyramid of blended image
-    plt.figure(figsize=(12, 6))
-    for i, lvl in enumerate(G_levels):
-        ax = plt.subplot(1, 4, i + 1)
-        disp = lvl
-        if disp.ndim == 2:
-            ax.imshow(disp, cmap='gray')
-        else:
-            ax.imshow(disp)
-        ax.set_title(f'G level {i + 1}')
-        ax.axis('off')
-
-    plt.subplots_adjust(wspace=0.06, hspace=0.1)
-    plt.tight_layout(rect=[0, 0, 1, 0.95])
-    plt.savefig('inputs/report/blended_gaussian_pyr.jpg')
-    plt.close()
-
-    # save Laplacian pyramid (Lc) levels
-    plt.figure(figsize=(12, 6))
-    for i, lvl in enumerate(Lc_levels):
-        ax = plt.subplot(1, 4, i + 1)
-        disp = _to_display(lvl)
-        if disp.ndim == 2:
-            ax.imshow(disp, cmap='gray')
-        else:
-            ax.imshow(np.clip(disp, 0.0, 1.0))
-        ax.set_title(f'L level {i + 1}')
-        ax.axis('off')
-    # plt.tight_layout()
-    plt.subplots_adjust(wspace=0.06, hspace=0.1)
-    plt.tight_layout(rect=[0, 0, 1, 0.95])
-    plt.savefig('outputs/report/blended_laplacian_pyr.jpg')
-    plt.close()
 
 
 def plot_fft_magnitude(image, out_path):
@@ -423,14 +335,8 @@ def plot_fft_magnitude(image, out_path):
 
     out_uint8 = (magnitude * 255.0).round().astype(np.uint8)
 
-    # render with matplotlib to add a title (use vmin/vmax to avoid autoscaling)
-    fig, ax = plt.subplots(figsize=(6, 6))
-    ax.imshow(out_uint8, cmap='gray', vmin=0, vmax=255)
-    ax.set_title('Buzzi vs. Bibi FFT Magnitude (log scale)')
-    ax.axis('off')
-    plt.tight_layout()
-    fig.savefig(out_path)
-    plt.close(fig)
+    plot_image(out_uint8, title="Buzzi vs. Bibi FFT Magnitude (log scale)",
+               out_path=out_path, cmap="gray", show=False, vmin=0, vmax=255)
 
 
 "------------------------------------------------------------------------------"
@@ -491,34 +397,10 @@ def hybrid_image(imgA_path, imgB_path, output_path, gray_scale=False):
 
     hybrid = low_B + high_A
     hybrid = np.clip(hybrid, 0, 1)
-    # plot in the same figure low_b and high_a
-    fig, axes = plt.subplots(1, 3, figsize=(12, 6))
-    axes[0].imshow(low_B, cmap='gray' if gray_scale else None)
-    axes[0].set_title('Low-pass B', pad=10)
-    axes[0].axis('off')
 
-    axes[1].imshow(high_A + 0.5, cmap='gray' if gray_scale else None)
-    axes[1].set_title('High-pass A (offset by 0.5 for visibility)', pad=10)
-    axes[1].axis('off')
-
-    axes[2].imshow(hybrid, cmap='gray' if gray_scale else None)
-    axes[2].set_title('Hybrid Image', pad=10)
-    axes[2].axis('off')
-
-    # reserve top margin so titles are not clipped, tighten layout and save
-    plt.tight_layout(pad=1.0, rect=[0, 0, 1, 0.92])
-    plt.subplots_adjust(wspace=0.02)
-    plt.savefig('outputs/report/hybrid_low_high_components.jpg',
-                bbox_inches='tight', pad_inches=0.1)
-    plt.show()
-    plt.close(fig)
-
-    # display and save
-    plt.figure(figsize=(8, 8))
-    plt.imshow(hybrid, cmap='gray' if gray_scale else None)
-    plt.axis('off')
-    plt.show()
-    plt.imsave(output_path, hybrid, cmap='gray' if gray_scale else None)
+    # display and save final hybrid
+    plot_image(hybrid, title=None, out_path=output_path,
+               cmap="gray" if gray_scale else None, show=True, figsize=(8, 8))
 
     return hybrid
 
@@ -571,17 +453,12 @@ if __name__ == '__main__':
                                mask_path)
     plot_triptych(load_image(imgA_path), load_image(imgB_aligned_path),
                   blended)
-    # plot_fft_magnitude(blended, 'inputs/report/blended_fft_magnitude.jpg')
-
-    # save figure
-    plt.savefig('outputs/results/trio_ver1.jpg')
-    plt.show()
-
+    plot_fft_magnitude(blended, 'inputs/report/blended_fft_magnitude.jpg')
     # -------------------------- Task 2 Execution ----------------------------
 
-    # print("Creating hybrid image...")
-    # output_path = 'outputs/results/hybrid_ver5.jpg'
-    # hybrid_image(imgA_path, imgB_aligned_path, output_path, gray_scale=True)
+    print("Creating hybrid image...")
+    output_path = 'outputs/results/hybrid_ver5.jpg'
+    hybrid_image(imgA_path, imgB_aligned_path, output_path, gray_scale=True)
 
     print("\nDone ..!")
 
