@@ -104,7 +104,7 @@ def flip_lr(img):
 
 
 "------------------------------------------------------------------------------"
-"---------------------------- Plotting utilities ------------------------------"
+"------------------------------ Plotting utils --------------------------------"
 "------------------------------------------------------------------------------"
 
 
@@ -136,30 +136,70 @@ def plot_image(image, title=None, out_path=None, cmap=None, show=False,
     return fig, ax
 
 
+def plot_triptych(imgA, imgB, blended, titles=None, figsize=(12, 4)):
+    """
+    Keep this convenience wrapper, but implement using plot_image three times.
+    The three images will be separate figures instead of a single triptych.
+    """
+    if titles is None:
+        titles = ("Buzzi", "Bibi (Aligned)", "Blended")
+
+    for image, title in zip((imgA, imgB, blended), titles):
+        plot_image(image, title=title, show=False)
+
+    # dummy return for backward compatibility; not really used elsewhere
+    return None, None
+
+
+def plot_fft_magnitude(image, out_path):
+    """Compute log-magnitude of 2D FFT of image luminance and save as uint8 image."""
+    img = np.array(image, dtype=np.float64, copy=False)
+    if img.ndim == 3 and img.shape[2] >= 3:
+        gray = np.dot(img[..., :3], [0.299, 0.587, 0.114])
+    else:
+        gray = img if img.ndim == 2 else img[..., 0]
+    # ensure numeric range suitable for FFT
+    if gray.max() > 1.0:
+        gray = gray / 255.0
+    gray = np.clip(gray, 0.0, 1.0)
+
+    F = np.fft.fft2(gray)
+    Fshift = np.fft.fftshift(F)
+    magnitude = np.log1p(np.abs(Fshift))
+
+    # normalize to [0,1]
+    if magnitude.max() > 0:
+        magnitude = magnitude / magnitude.max()
+    else:
+        magnitude = np.zeros_like(magnitude)
+
+    out_uint8 = (magnitude * 255.0).round().astype(np.uint8)
+
+    plot_image(out_uint8, title="Buzzi vs. Bibi FFT Magnitude (log scale)",
+               out_path=out_path, cmap="gray", show=False, vmin=0, vmax=255)
+
+
 "------------------------------------------------------------------------------"
 "-------------------------- Task 1 - Blended Image ----------------------------"
 "------------------------------------------------------------------------------"
 
 
+def load_image(img_path, as_gray=False):
+    img = plt.imread(img_path).astype(np.float64)
+    if img.max() > 1.0:
+        img /= 255.0
+    if img.ndim == 3 and img.shape[2] == 4:
+        img = img[..., :3]
+    if as_gray and img.ndim == 3:
+        img = np.dot(img[..., :3], [0.299, 0.587, 0.114])
+    return img
+
+
 def _blur_single_channel(img, kernel):
-    # TODO: check results with new implementation
+    # blur cols then rows for efficiency
     temp = convolve1d(img, kernel, axis=1, mode='nearest')
     blurred = convolve1d(temp, kernel, axis=0, mode='nearest')
     return blurred
-    # OLD VERSION BELOW:
-    # pad = len(kernel) // 2
-    # temp = np.zeros_like(img, dtype=np.float64)
-    #
-    # row_padded = np.pad(img, ((0, 0), (pad, pad)), mode='edge')
-    # for i in range(img.shape[0]):
-    #     temp[i, :] = np.convolve(row_padded[i], kernel, mode='valid')
-    #
-    # col_padded = np.pad(temp, ((pad, pad), (0, 0)), mode='edge')
-    # blurred = np.zeros_like(img, dtype=np.float64)
-    # for j in range(img.shape[1]):
-    #     blurred[:, j] = np.convolve(col_padded[:, j], kernel, mode='valid')
-    #
-    # return blurred
 
 
 def blur(img, kernel):
@@ -213,38 +253,13 @@ def laplacian_pyramid(img, num_of_levels):
         if expanded.shape != gaussian_pyr[i].shape:
             target_height, target_width = gaussian_pyr[i].shape[:2]
             expanded = expanded[:target_height, :target_width, ...]
+
         laplacian_pyr.append(gaussian_pyr[i] - expanded)
 
     # last level is the same as in Gaussian pyramid
     laplacian_pyr.append(gaussian_pyr[-1])
 
     return laplacian_pyr
-
-
-def load_image(img_path, as_gray=False):
-    img = plt.imread(img_path).astype(np.float64)
-    if img.max() > 1.0:
-        img /= 255.0
-    if img.ndim == 3 and img.shape[2] == 4:
-        img = img[..., :3]
-    if as_gray and img.ndim == 3:
-        img = np.dot(img[..., :3], [0.299, 0.587, 0.114])
-    return img
-
-
-def plot_triptych(imgA, imgB, blended, titles=None, figsize=(12, 4)):
-    """
-    Keep this convenience wrapper, but implement using plot_image three times.
-    The three images will be separate figures instead of a single triptych.
-    """
-    if titles is None:
-        titles = ("Buzzi", "Bibi (Aligned)", "Blended")
-
-    for image, title in zip((imgA, imgB, blended), titles):
-        plot_image(image, title=title, show=False)
-
-    # dummy return for backward compatibility; not really used elsewhere
-    return None, None
 
 
 def max_pyramid_levels(shape):
@@ -304,39 +319,12 @@ def pyramid_blending(imgA_path, imgB_path, output_path,
         if blended_img.shape != Lc[k].shape:
             target_height, target_width = Lc[k].shape[:2]
             blended_img = blended_img[:target_height, :target_width, ...]
+
         blended_img += Lc[k]
 
     blended_img = np.clip(blended_img, 0.0, 1.0)
     plt.imsave(output_path, blended_img)
     return blended_img
-
-
-def plot_fft_magnitude(image, out_path):
-    """Compute log-magnitude of 2D FFT of image luminance and save as uint8 image."""
-    img = np.array(image, dtype=np.float64, copy=False)
-    if img.ndim == 3 and img.shape[2] >= 3:
-        gray = np.dot(img[..., :3], [0.299, 0.587, 0.114])
-    else:
-        gray = img if img.ndim == 2 else img[..., 0]
-    # ensure numeric range suitable for FFT
-    if gray.max() > 1.0:
-        gray = gray / 255.0
-    gray = np.clip(gray, 0.0, 1.0)
-
-    F = np.fft.fft2(gray)
-    Fshift = np.fft.fftshift(F)
-    magnitude = np.log1p(np.abs(Fshift))
-
-    # normalize to [0,1]
-    if magnitude.max() > 0:
-        magnitude = magnitude / magnitude.max()
-    else:
-        magnitude = np.zeros_like(magnitude)
-
-    out_uint8 = (magnitude * 255.0).round().astype(np.uint8)
-
-    plot_image(out_uint8, title="Buzzi vs. Bibi FFT Magnitude (log scale)",
-               out_path=out_path, cmap="gray", show=False, vmin=0, vmax=255)
 
 
 "------------------------------------------------------------------------------"
@@ -365,8 +353,8 @@ def hybrid_image(imgA_path, imgB_path, output_path, gray_scale=False):
     Create a hybrid image from imgA and imgB.
     """
     # constants
-    LOW_SIGMA_RATIO = 0.02
-    HIGH_SIGMA_RATIO = 0.005
+    LOW_SIGMA_RATIO = 0.02  # Large sigma → wide kernel → strong blur (more low‑pass)
+    HIGH_SIGMA_RATIO = 0.005  # Small sigma → narrow kernel → preserves high‑frequency detail
 
     # load inputs
     if gray_scale:
@@ -454,6 +442,7 @@ if __name__ == '__main__':
     plot_triptych(load_image(imgA_path), load_image(imgB_aligned_path),
                   blended)
     plot_fft_magnitude(blended, 'inputs/report/blended_fft_magnitude.jpg')
+
     # -------------------------- Task 2 Execution ----------------------------
 
     print("Creating hybrid image...")
@@ -461,6 +450,3 @@ if __name__ == '__main__':
     hybrid_image(imgA_path, imgB_aligned_path, output_path, gray_scale=True)
 
     print("\nDone ..!")
-
-    # TODO: create a tar file you can run the following command:
-    # tar -cvf ex3.tar ex3.py requirements.txt ./inputs ./outputs
