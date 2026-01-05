@@ -1,4 +1,4 @@
-# Multi-Scale Image Blending System
+# Pyramid Image Blending System
 
 This project implements **Multi-Scale Image Blending** using **Gaussian and Laplacian pyramids**. The technique allows for seamless blending of two images by mixing their frequencies separately, preventing seams and ghosting artifacts common in direct composition.
 
