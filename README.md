@@ -1,4 +1,4 @@
-# Multi-Scale Image Blending System
+# Pyramid Image Blending System
 
 This project implements **Multi-Scale Image Blending** using **Gaussian and Laplacian pyramids**. The technique allows for seamless blending of two images by mixing their frequencies separately, preventing seams and ghosting artifacts common in direct composition.
 
@@ -14,7 +14,7 @@ Based on the method described by Burt and Adelson (1983).
 ## Files
 
 * `main.py`: Entry point for running the blending script.
-* `create_mask.py`: Contains a function for aoutomated mask creation based on face marks.
+* `create_mask.py`: Contains a function for automated mask creation based on face marks.
 * `face_align.py`: Helper functions for image aligning by face marks.
 * `inputs/`: Directory containing sample input images and masks.
 * `outputs/`: Directory containing sample output images.
